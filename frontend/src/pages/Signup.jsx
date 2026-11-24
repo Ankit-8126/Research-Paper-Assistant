@@ -1,11 +1,11 @@
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { signupUser } from "../services/api";
 import "../styles/auth.css";
 
 function Signup() {
     const navigate = useNavigate();
-    const { login } = useAuth();
 
     const [formData, setFormData] = useState({
         name: "",
@@ -20,17 +20,19 @@ function Signup() {
         });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const userData = {
-            name: formData.name,
-            email: formData.email,
-        };
+        try {
+            await signupUser(formData);
 
-        login(userData);
+            alert("Account created successfully");
 
-        navigate("/dashboard");
+            navigate("/login");
+
+        } catch (error) {
+            alert(error.message);
+        }
     };
 
     return (

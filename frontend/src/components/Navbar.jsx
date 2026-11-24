@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -92,8 +93,7 @@ function Navbar() {
                 </button>
 
                 <div
-                    className={`navbar-menu ${menuOpen ? "menu-open" : ""
-                        }`}
+                    className={`navbar-menu ${menuOpen ? "menu-open" : ""}`}
                 >
                     <div className="navbar-links">
                         <Link to="/" onClick={closeMenu}>
@@ -101,7 +101,11 @@ function Navbar() {
                         </Link>
 
                         <Link to="/search" onClick={closeMenu}>
-                            Papers
+                            Search Papers
+                        </Link>
+
+                        <Link to="/published-papers" onClick={closeMenu}>
+                            Published Papers
                         </Link>
 
                         <Link to="/my-research" onClick={closeMenu}>

@@ -1,13 +1,15 @@
-import { createContext, useContext, useState } from "react";
+import {
+    createContext,
+    useContext,
+    useEffect,
+    useState
+} from "react";
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(() => {
-        const savedUser = localStorage.getItem("researchAI_user");
-
-        return savedUser ? JSON.parse(savedUser) : null;
-    });
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     const login = (userData) => {
         setUser(userData);
@@ -20,8 +22,61 @@ export function AuthProvider({ children }) {
 
     const logout = () => {
         setUser(null);
+
         localStorage.removeItem("researchAI_user");
+        localStorage.removeItem("researchAI_token");
     };
+
+    useEffect(() => {
+        const verifyUser = async () => {
+            const token = localStorage.getItem("researchAI_token");
+
+            if (!token) {
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    "http://localhost:8000/users/me",
+                    {
+                        method: "GET",
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                        },
+                    }
+                );
+
+                if (!response.ok) {
+                    logout();
+                    setLoading(false);
+                    return;
+                }
+
+                const data = await response.json();
+
+                const userData = {
+                    user_id: data.user_id,
+                    name: data.name,
+                    email: data.email,
+                };
+
+                setUser(userData);
+
+                localStorage.setItem(
+                    "researchAI_user",
+                    JSON.stringify(userData)
+                );
+
+            } catch (error) {
+                logout();
+            }
+
+            setLoading(false);
+        };
+
+        verifyUser();
+    }, []);
 
     return (
         <AuthContext.Provider
@@ -30,6 +85,7 @@ export function AuthProvider({ children }) {
                 login,
                 logout,
                 isAuthenticated: Boolean(user),
+                loading,
             }}
         >
             {children}

@@ -1,6 +1,8 @@
+
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { loginUser } from "../services/api";
 import "../styles/auth.css";
 
 function Login() {
@@ -19,17 +21,32 @@ function Login() {
         });
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const userData = {
-            name: formData.email.split("@")[0],
-            email: formData.email,
-        };
+        try {
+            const data = await loginUser(formData);
 
-        login(userData);
+            localStorage.setItem(
+                "researchAI_token",
+                data.access_token
+            );
 
-        navigate("/dashboard");
+            const userData = {
+                user_id: data.user_id,
+                name: data.name,
+                email: formData.email,
+            };
+
+            login(userData);
+
+            alert("Login successful");
+
+            navigate("/dashboard");
+
+        } catch (error) {
+            alert(error.message);
+        }
     };
 
     return (

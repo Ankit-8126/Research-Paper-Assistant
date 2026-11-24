@@ -1,8 +1,24 @@
-from pwdlib import PasswordHash
+
+import os
+from pathlib import Path
+
 import jwt
+from dotenv import load_dotenv
 from fastapi import HTTPException
+from pwdlib import PasswordHash
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BASE_DIR / ".env")
 
 password_hash = PasswordHash.recommended()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = "HS256"
+
+if not SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY not found. Check backend/.env file."
+    )
 
 
 def hash_password(password: str):
@@ -11,10 +27,6 @@ def hash_password(password: str):
 
 def verify_password(password: str, hashed_password: str):
     return password_hash.verify(password, hashed_password)
-
-
-SECRET_KEY = "research-paper-assistant-secret-key"
-ALGORITHM = "HS256"
 
 
 def create_access_token(user_id: int):
@@ -29,6 +41,7 @@ def create_access_token(user_id: int):
     )
 
     return token
+
 
 def verify_access_token(token: str):
     try:

@@ -1,38 +1,43 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import "../styles/literature-review.css";
+import { getPapers } from "../services/api";
 
 function LiteratureReview() {
-    const [papers, setPapers] = useState([
-        {
-            id: 1,
-            title: "Artificial Intelligence in Healthcare",
-            authors: "John Smith, Emily Carter",
-            year: 2024,
-            category: "Artificial Intelligence",
-            status: "Completed",
-        },
-        {
-            id: 2,
-            title: "Machine Learning Research Methods",
-            authors: "David Wilson, Sarah Brown",
-            year: 2023,
-            category: "Machine Learning",
-            status: "In Progress",
-        },
-        {
-            id: 3,
-            title: "Deep Learning Applications",
-            authors: "Michael Lee, Robert Taylor",
-            year: 2024,
-            category: "Deep Learning",
-            status: "To Review",
-        },
-    ]);
+    const navigate = useNavigate();
 
+    const [papers, setPapers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState("All");
-    const [generated, setGenerated] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        const loadPapers = async () => {
+            try {
+                setLoading(true);
+                setError("");
+
+                const data = await getPapers();
+
+                const paperList = Array.isArray(data) ? data : [];
+
+                const updatedPapers = paperList.map((paper) => ({
+                    ...paper,
+                    status: "To Review",
+                }));
+
+                setPapers(updatedPapers);
+            } catch (err) {
+                setError(err.message || "Unable to load research papers.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadPapers();
+    }, []);
 
     const updateStatus = (id, newStatus) => {
         setPapers((currentPapers) =>
@@ -44,27 +49,23 @@ function LiteratureReview() {
         );
     };
 
-    const removePaper = (id) => {
-        setPapers((currentPapers) =>
-            currentPapers.filter((paper) => paper.id !== id)
-        );
-    };
-
-    const handleGenerateReview = () => {
-        setGenerated(true);
-
-        setTimeout(() => {
-            setGenerated(false);
-        }, 2500);
+    const handleOpenPaper = () => {
+        if (papers.length > 0) {
+            navigate(`/paper/${papers[0].id}`);
+        } else {
+            navigate("/upload");
+        }
     };
 
     const filteredPapers = papers.filter((paper) => {
         const search = searchQuery.toLowerCase().trim();
 
+        const title = (paper.title || "").toLowerCase();
+        const fileName = (paper.file_name || "").toLowerCase();
+
         const matchesSearch =
-            paper.title.toLowerCase().includes(search) ||
-            paper.authors.toLowerCase().includes(search) ||
-            paper.category.toLowerCase().includes(search);
+            title.includes(search) ||
+            fileName.includes(search);
 
         const matchesStatus =
             statusFilter === "All" ||
@@ -85,10 +86,14 @@ function LiteratureReview() {
         (paper) => paper.status === "To Review"
     ).length;
 
+    const progressPercentage =
+        papers.length > 0
+            ? Math.round((completedCount / papers.length) * 100)
+            : 0;
+
     return (
         <main className="literature-review-page">
 
-            {/* Header */}
             <section className="literature-header">
 
                 <div>
@@ -111,17 +116,15 @@ function LiteratureReview() {
                 <button
                     type="button"
                     className="literature-primary-button"
-                    onClick={handleGenerateReview}
+                    onClick={handleOpenPaper}
                 >
-                    {generated
-                        ? "Review Generated"
-                        : "Generate Review"}
+                    {papers.length > 0
+                        ? "Open First Paper"
+                        : "Upload a Paper"}
                 </button>
 
             </section>
 
-
-            {/* Overview */}
             <section className="literature-overview">
 
                 <div className="literature-overview-card">
@@ -150,8 +153,6 @@ function LiteratureReview() {
 
             </section>
 
-
-            {/* Progress */}
             <section className="literature-progress">
 
                 <div className="literature-progress-heading">
@@ -160,23 +161,13 @@ function LiteratureReview() {
                         <h2>Research coverage</h2>
                     </div>
 
-                    <strong>
-                        {papers.length > 0
-                            ? Math.round(
-                                (completedCount / papers.length) * 100
-                            )
-                            : 0}
-                        %
-                    </strong>
+                    <strong>{progressPercentage}%</strong>
                 </div>
 
                 <div className="literature-progress-track">
                     <span
                         style={{
-                            width: `${papers.length > 0
-                                    ? (completedCount / papers.length) * 100
-                                    : 0
-                                }%`,
+                            width: `${progressPercentage}%`,
                         }}
                     ></span>
                 </div>
@@ -188,8 +179,6 @@ function LiteratureReview() {
 
             </section>
 
-
-            {/* Toolbar */}
             <section className="literature-toolbar">
 
                 <div className="literature-search">
@@ -226,8 +215,6 @@ function LiteratureReview() {
 
             </section>
 
-
-            {/* Papers */}
             <section className="literature-list">
 
                 <div className="literature-list-heading">
@@ -246,7 +233,16 @@ function LiteratureReview() {
                     </span>
                 </div>
 
-                {filteredPapers.length > 0 ? (
+                {loading ? (
+                    <div className="literature-empty">
+                        <h2>Loading research papers...</h2>
+                    </div>
+                ) : error ? (
+                    <div className="literature-empty">
+                        <h2>Unable to load research papers</h2>
+                        <p>{error}</p>
+                    </div>
+                ) : filteredPapers.length > 0 ? (
                     filteredPapers.map((paper, index) => (
                         <article
                             className="literature-paper-card"
@@ -261,16 +257,17 @@ function LiteratureReview() {
 
                                 <div className="literature-paper-top">
                                     <span>
-                                        {paper.category}
+                                        Uploaded Research Paper
                                     </span>
 
                                     <span
-                                        className={`literature-status ${paper.status === "Completed"
+                                        className={`literature-status ${
+                                            paper.status === "Completed"
                                                 ? "literature-status-completed"
                                                 : paper.status === "In Progress"
                                                     ? "literature-status-progress"
                                                     : "literature-status-review"
-                                            }`}
+                                        }`}
                                     >
                                         {paper.status}
                                     </span>
@@ -280,15 +277,15 @@ function LiteratureReview() {
                                     to={`/paper/${paper.id}`}
                                     className="literature-paper-title"
                                 >
-                                    {paper.title}
+                                    {paper.title || paper.file_name}
                                 </Link>
 
                                 <p className="literature-paper-authors">
-                                    {paper.authors}
+                                    Author details not available
                                 </p>
 
                                 <div className="literature-paper-meta">
-                                    <span>{paper.year}</span>
+                                    <span>Publication year not available</span>
                                     <span>•</span>
                                     <span>
                                         Research paper #{paper.id}
@@ -307,7 +304,9 @@ function LiteratureReview() {
                                             e.target.value
                                         )
                                     }
-                                    aria-label={`Update status for ${paper.title}`}
+                                    aria-label={`Update status for ${
+                                        paper.title || paper.file_name
+                                    }`}
                                 >
                                     <option value="To Review">
                                         To Review
@@ -327,16 +326,6 @@ function LiteratureReview() {
                                     View Paper
                                 </Link>
 
-                                <button
-                                    type="button"
-                                    className="literature-remove-button"
-                                    onClick={() =>
-                                        removePaper(paper.id)
-                                    }
-                                >
-                                    Remove
-                                </button>
-
                             </div>
 
                         </article>
@@ -349,19 +338,22 @@ function LiteratureReview() {
                         </div>
 
                         <h2>
-                            No research papers found
+                            {papers.length === 0
+                                ? "No research papers uploaded"
+                                : "No research papers found"}
                         </h2>
 
                         <p>
-                            Try changing your search or status filter,
-                            or add more papers to your literature review.
+                            {papers.length === 0
+                                ? "Upload a PDF to add it to your literature workspace."
+                                : "Try changing your search or status filter."}
                         </p>
 
                         <Link
-                            to="/search"
+                            to="/upload"
                             className="literature-secondary-button"
                         >
-                            Explore Papers
+                            Upload Research Paper
                         </Link>
 
                     </div>
@@ -369,8 +361,6 @@ function LiteratureReview() {
 
             </section>
 
-
-            {/* Bottom section */}
             <section className="literature-bottom">
 
                 <div>

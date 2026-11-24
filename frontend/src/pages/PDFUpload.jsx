@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { uploadPaper } from "../services/api";
 import "../styles/pdf-upload.css";
+
 
 function PDFUpload() {
     const fileInputRef = useRef(null);
@@ -133,35 +135,45 @@ function PDFUpload() {
     // DEMO UPLOAD
     // -----------------------------
 
-    const handleUpload = () => {
-        if (!selectedFile) {
-            setError("Please select a PDF file first.");
+    const handleUpload = async () => {
+    if (!selectedFile) {
+        setError("Please select a PDF file first.");
+        return;
+    }
+
+    setUploading(true);
+    setError("");
+    setProgress(0);
+
+    try {
+        const token = localStorage.getItem("researchAI_token");
+
+        if (!token) {
+            setError("Please login before uploading a paper.");
+            setUploading(false);
             return;
         }
 
-        setError("");
-        setUploaded(false);
-        setUploading(true);
+        setProgress(20);
+
+        const data = await uploadPaper(selectedFile);
+
+        setProgress(100);
+        setUploaded(true);
+
+        console.log("Uploaded paper:", data);
+
+    } catch (error) {
+        console.error(error);
+
+        setError(error.message || "Unable to upload PDF.");
+
         setProgress(0);
 
-        let currentProgress = 0;
-
-        const interval = setInterval(() => {
-            currentProgress += 10;
-
-            setProgress(currentProgress);
-
-            if (currentProgress >= 100) {
-                clearInterval(interval);
-
-                setTimeout(() => {
-                    setUploading(false);
-                    setUploaded(true);
-                }, 300);
-            }
-        }, 150);
-    };
-
+    } finally {
+        setUploading(false);
+    }
+};
     // -----------------------------
     // FILE SIZE
     // -----------------------------

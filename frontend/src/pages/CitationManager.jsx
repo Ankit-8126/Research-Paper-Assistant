@@ -1,67 +1,314 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import "../styles/citation-manager.css";
+import { getPapers } from "../services/api";
+
+const STORAGE_KEY = "researchAI_citation_metadata";
+
+const createDefaultMetadata = (paper) => {
+    const title = paper.title || paper.file_name || "Research Paper";
+
+    return {
+        authors: "",
+        year: "",
+        title: title.replace(/\.pdf$/i, ""),
+        journal: "",
+        volume: "",
+        issue: "",
+        pages: "",
+        doi: "",
+        url: "",
+    };
+};
+
+const getAuthorSurname = (authors) => {
+    if (!authors || !authors.trim()) {
+        return "Unknown Author";
+    }
+
+    const firstAuthor = authors
+        .split(";")[0]
+        .split("&")[0]
+        .trim();
+
+    const surname = firstAuthor.split(",")[0].trim();
+
+    return surname || firstAuthor;
+};
+
+const getSourceLink = (metadata) => {
+    if (metadata.doi) {
+        return `https://doi.org/${metadata.doi.replace(
+            /^https?:\/\/(dx\.)?doi\.org\//i,
+            ""
+        )}`;
+    }
+
+    return metadata.url || "";
+};
+
+const generateCitation = (metadata, style, index) => {
+    const authors = metadata.authors.trim();
+    const title = metadata.title.trim();
+    const year = metadata.year.trim();
+    const journal = metadata.journal.trim();
+    const volume = metadata.volume.trim();
+    const issue = metadata.issue.trim();
+    const pages = metadata.pages.trim();
+    const sourceLink = getSourceLink(metadata);
+
+    const volumeIssue = [
+        volume ? `vol. ${volume}` : "",
+        issue ? `no. ${issue}` : "",
+    ].filter(Boolean).join(", ");
+
+    const pageText = pages ? `pp. ${pages}` : "";
+
+    if (style === "APA") {
+        let citation = authors ? `${authors}. ` : "";
+        citation += `(${year || "n.d."}). `;
+        citation += title ? `${title}.` : "[Title unavailable].";
+
+        if (journal) {
+            citation += ` ${journal}`;
+
+            if (volume) {
+                citation += `, ${volume}`;
+            }
+
+            if (issue) {
+                citation += `(${issue})`;
+            }
+
+            if (pages) {
+                citation += `, ${pages}`;
+            }
+
+            citation += ".";
+        }
+
+        if (sourceLink) {
+            citation += ` ${sourceLink}`;
+        }
+
+        return citation;
+    }
+
+    if (style === "MLA") {
+        let citation = authors ? `${authors}. ` : "";
+        citation += title ? `"${title}." ` : "";
+
+        if (journal) {
+            citation += `${journal}, `;
+        }
+
+        if (volumeIssue) {
+            citation += `${volumeIssue}, `;
+        }
+
+        if (year) {
+            citation += `${year}, `;
+        }
+
+        if (pageText) {
+            citation += `${pageText}.`;
+        }
+
+        citation = citation.trim();
+
+        if (sourceLink) {
+            citation += ` ${sourceLink}.`;
+        }
+
+        return citation || "[Incomplete citation]";
+    }
+
+    if (style === "Chicago") {
+        let citation = authors ? `${authors}. ` : "";
+        citation += title ? `"${title}." ` : "";
+
+        if (journal) {
+            citation += `${journal} `;
+        }
+
+        if (volume) {
+            citation += volume;
+        }
+
+        if (issue) {
+            citation += `, no. ${issue}`;
+        }
+
+        if (year) {
+            citation += ` (${year})`;
+        }
+
+        if (pages) {
+            citation += `: ${pages}`;
+        }
+
+        citation = citation.trim();
+
+        if (citation && !citation.endsWith(".")) {
+            citation += ".";
+        }
+
+        if (sourceLink) {
+            citation += ` ${sourceLink}`;
+        }
+
+        return citation || "[Incomplete citation]";
+    }
+
+    if (style === "IEEE") {
+        let citation = `[${index + 1}] `;
+
+        if (authors) {
+            citation += `${authors}, `;
+        }
+
+        if (title) {
+            citation += `"${title}," `;
+        }
+
+        if (journal) {
+            citation += `${journal}, `;
+        }
+
+        if (volumeIssue) {
+            citation += `${volumeIssue}, `;
+        }
+
+        if (pageText) {
+            citation += `${pageText}, `;
+        }
+
+        if (year) {
+            citation += `${year}.`;
+        } else {
+            citation = citation.trim().replace(/,$/, ".");
+        }
+
+        if (sourceLink) {
+            citation += ` ${sourceLink}`;
+        }
+
+        return citation;
+    }
+
+    return title;
+};
+
+const generateInTextCitation = (metadata, style, index) => {
+    const surname = getAuthorSurname(metadata.authors);
+    const year = metadata.year || "n.d.";
+
+    if (style === "APA") {
+        return `(${surname}, ${year})`;
+    }
+
+    if (style === "MLA") {
+        return `(${surname})`;
+    }
+
+    if (style === "Chicago") {
+        return `(${surname} ${year})`;
+    }
+
+    return `[${index + 1}]`;
+};
 
 function CitationManager() {
     const [citationStyle, setCitationStyle] = useState("APA");
     const [searchQuery, setSearchQuery] = useState("");
     const [copiedId, setCopiedId] = useState(null);
 
-    const [papers, setPapers] = useState([
-        {
-            id: 1,
-            title: "Artificial Intelligence in Modern Healthcare",
-            authors: "Smith, J., & Wilson, S.",
-            year: "2024",
-            journal: "Journal of Modern Healthcare",
-        },
-        {
-            id: 2,
-            title: "Machine Learning Approaches for Data Analysis",
-            authors: "Kumar, D., & Johnson, E.",
-            year: "2023",
-            journal: "International Journal of Data Science",
-        },
-        {
-            id: 3,
-            title: "Large Language Models and Research Applications",
-            authors: "Brown, M., & Lee, A.",
-            year: "2024",
-            journal: "AI Research Journal",
-        },
-    ]);
+    const [papers, setPapers] = useState([]);
+    const [metadataByPaper, setMetadataByPaper] = useState({});
 
-    const generateCitation = (paper) => {
-        if (citationStyle === "APA") {
-            return `${paper.authors} (${paper.year}). ${paper.title}. ${paper.journal}.`;
-        }
+    const [editingId, setEditingId] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    const [copyMessage, setCopyMessage] = useState("");
 
-        if (citationStyle === "MLA") {
-            return `${paper.authors}. "${paper.title}." ${paper.journal}, ${paper.year}.`;
-        }
+    useEffect(() => {
+        const loadPapers = async () => {
+            try {
+                setLoading(true);
+                setError("");
 
-        return `${paper.authors}, "${paper.title}," ${paper.journal}, ${paper.year}.`;
+                const data = await getPapers();
+
+                setPapers(data);
+
+                const savedMetadata = localStorage.getItem(STORAGE_KEY);
+
+                if (savedMetadata) {
+                    try {
+                        setMetadataByPaper(JSON.parse(savedMetadata));
+                    } catch {
+                        setMetadataByPaper({});
+                    }
+                }
+            } catch (err) {
+                setError(
+                    err.message || "Unable to load research papers."
+                );
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadPapers();
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem(
+            STORAGE_KEY,
+            JSON.stringify(metadataByPaper)
+        );
+    }, [metadataByPaper]);
+
+    const getMetadata = (paper) => {
+        return (
+            metadataByPaper[paper.id] ||
+            createDefaultMetadata(paper)
+        );
     };
 
-    const copyCitation = async (paper) => {
-        const citation = generateCitation(paper);
+    const updateMetadata = (paper, field, value) => {
+        setMetadataByPaper((previous) => {
+            const current = previous[paper.id] ||
+                createDefaultMetadata(paper);
 
+            return {
+                ...previous,
+                [paper.id]: {
+                    ...current,
+                    [field]: value,
+                },
+            };
+        });
+    };
+
+    const copyText = async (text, id) => {
         try {
-            await navigator.clipboard.writeText(citation);
+            await navigator.clipboard.writeText(text);
 
-            setCopiedId(paper.id);
+            setCopiedId(id);
+            setCopyMessage("Copied successfully!");
 
             setTimeout(() => {
                 setCopiedId(null);
-            }, 1500);
+                setCopyMessage("");
+            }, 1800);
         } catch {
-            alert("Unable to copy citation.");
-        }
-    };
+            setCopyMessage("Unable to copy. Please try again.");
 
-    const deleteCitation = (paperId) => {
-        setPapers((currentPapers) =>
-            currentPapers.filter((paper) => paper.id !== paperId)
-        );
+            setTimeout(() => {
+                setCopyMessage("");
+            }, 2500);
+        }
     };
 
     const filteredPapers = papers.filter((paper) => {
@@ -71,27 +318,96 @@ function CitationManager() {
             return true;
         }
 
+        const metadata = getMetadata(paper);
+
+        const title = metadata.title.toLowerCase();
+        const fileName = (paper.file_name || "").toLowerCase();
+        const authors = metadata.authors.toLowerCase();
+        const journal = metadata.journal.toLowerCase();
+
         return (
-            paper.title.toLowerCase().includes(query) ||
-            paper.authors.toLowerCase().includes(query) ||
-            paper.journal.toLowerCase().includes(query) ||
-            paper.year.includes(query)
+            title.includes(query) ||
+            fileName.includes(query) ||
+            authors.includes(query) ||
+            journal.includes(query)
         );
     });
+
+    const completeCount = papers.filter((paper) => {
+        const metadata = getMetadata(paper);
+
+        return (
+            metadata.authors.trim() &&
+            metadata.year.trim() &&
+            metadata.title.trim() &&
+            (metadata.journal.trim() ||
+                metadata.doi.trim() ||
+                metadata.url.trim())
+        );
+    }).length;
+
+    const copyAllReferences = () => {
+        const references = filteredPapers.map((paper, index) => {
+            const metadata = getMetadata(paper);
+
+            return generateCitation(
+                metadata,
+                citationStyle,
+                index
+            );
+        });
+
+        if (references.length === 0) {
+            setCopyMessage("No references available to copy.");
+            return;
+        }
+
+        const referenceList = references.join("\n\n");
+
+        copyText(referenceList, "all");
+    };
+
+    const renderMetadataField = (
+        paper,
+        field,
+        label,
+        placeholder
+    ) => {
+        const metadata = getMetadata(paper);
+
+        return (
+            <div className="citation-form-field">
+                <label>{label}</label>
+
+                <input
+                    type="text"
+                    value={metadata[field] || ""}
+                    placeholder={placeholder}
+                    onChange={(event) =>
+                        updateMetadata(
+                            paper,
+                            field,
+                            event.target.value
+                        )
+                    }
+                />
+            </div>
+        );
+    };
 
     return (
         <main className="citation-page">
             <div className="citation-header">
                 <div>
                     <span className="citation-label">
-                        CITATION MANAGER
+                        ACADEMIC RESEARCH TOOLS
                     </span>
 
-                    <h1>Manage Your Citations</h1>
+                    <h1>Citation Manager</h1>
 
                     <p>
-                        Generate and organize citations for your
-                        research papers.
+                        Generate, manage and organize academic
+                        references for your research papers.
                     </p>
                 </div>
 
@@ -103,129 +419,324 @@ function CitationManager() {
                     <select
                         id="citationStyle"
                         value={citationStyle}
-                        onChange={(e) =>
-                            setCitationStyle(e.target.value)
+                        onChange={(event) =>
+                            setCitationStyle(event.target.value)
                         }
                     >
-                        <option value="APA">APA</option>
-                        <option value="MLA">MLA</option>
-                        <option value="Chicago">
-                            Chicago
-                        </option>
+                        <option value="APA">APA 7th Edition</option>
+                        <option value="MLA">MLA 9th Edition</option>
+                        <option value="Chicago">Chicago</option>
+                        <option value="IEEE">IEEE</option>
                     </select>
                 </div>
             </div>
 
             <section className="citation-summary">
                 <div>
-                    <span>📝</span>
-
-                    <strong>{papers.length}</strong>
-
-                    <p>Total Citations</p>
-                </div>
-
-                <div>
                     <span>📚</span>
-
                     <strong>{papers.length}</strong>
-
                     <p>Research Papers</p>
                 </div>
 
                 <div>
+                    <span>📝</span>
+                    <strong>{papers.length}</strong>
+                    <p>Generated References</p>
+                </div>
+
+                <div>
+                    <span>✓</span>
+                    <strong>{completeCount}</strong>
+                    <p>Complete Metadata</p>
+                </div>
+
+                <div>
                     <span>⚙️</span>
-
                     <strong>{citationStyle}</strong>
-
-                    <p>Current Style</p>
+                    <p>Selected Style</p>
                 </div>
             </section>
 
             <section className="citation-list-section">
                 <div className="citation-section-heading">
                     <div>
-                        <h2>Generated Citations</h2>
+                        <h2>Your References</h2>
 
                         <span>
-                            {filteredPapers.length}{" "}
-                            {filteredPapers.length === 1
-                                ? "citation"
-                                : "citations"}
+                            {filteredPapers.length} papers found
                         </span>
                     </div>
 
-                    <input
-                        type="text"
-                        className="citation-search"
-                        placeholder="Search citations..."
-                        value={searchQuery}
-                        onChange={(e) =>
-                            setSearchQuery(e.target.value)
-                        }
-                    />
+                    <div className="citation-toolbar">
+                        <input
+                            type="text"
+                            className="citation-search"
+                            placeholder="Search title, author or journal..."
+                            value={searchQuery}
+                            onChange={(event) =>
+                                setSearchQuery(event.target.value)
+                            }
+                        />
+
+                        <button
+                            type="button"
+                            className="citation-copy-all"
+                            onClick={copyAllReferences}
+                            disabled={filteredPapers.length === 0}
+                        >
+                            {copiedId === "all"
+                                ? "✓ Copied All"
+                                : "Copy All References"}
+                        </button>
+                    </div>
                 </div>
 
-                {filteredPapers.length > 0 ? (
-                    <div className="citation-list">
-                        {filteredPapers.map((paper) => (
-                            <article
-                                key={paper.id}
-                                className="citation-card"
-                            >
-                                <div className="citation-card-header">
-                                    <div>
-                                        <span className="citation-type">
-                                            {citationStyle}
-                                        </span>
+                {copyMessage && (
+                    <div className="citation-feedback">
+                        {copyMessage}
+                    </div>
+                )}
 
-                                        <h3>{paper.title}</h3>
+                {loading ? (
+                    <div className="citation-empty">
+                        <h3>Loading research papers...</h3>
+                    </div>
+                ) : error ? (
+                    <div className="citation-empty">
+                        <h3>Unable to load references</h3>
+                        <p>{error}</p>
+                    </div>
+                ) : filteredPapers.length > 0 ? (
+                    <div className="citation-list">
+                        {filteredPapers.map((paper, index) => {
+                            const metadata = getMetadata(paper);
+
+                            const citation = generateCitation(
+                                metadata,
+                                citationStyle,
+                                index
+                            );
+
+                            const inTextCitation =
+                                generateInTextCitation(
+                                    metadata,
+                                    citationStyle,
+                                    index
+                                );
+
+                            const isComplete = Boolean(
+                                metadata.authors.trim() &&
+                                metadata.year.trim() &&
+                                metadata.title.trim() &&
+                                (
+                                    metadata.journal.trim() ||
+                                    metadata.doi.trim() ||
+                                    metadata.url.trim()
+                                )
+                            );
+
+                            return (
+                                <article
+                                    key={paper.id}
+                                    className="citation-card"
+                                >
+                                    <div className="citation-card-header">
+                                        <div>
+                                            <span className="citation-type">
+                                                {citationStyle}
+                                            </span>
+
+                                            <h3>
+                                                {metadata.title}
+                                            </h3>
+
+                                            <span
+                                                className={
+                                                    isComplete
+                                                        ? "citation-status complete"
+                                                        : "citation-status incomplete"
+                                                }
+                                            >
+                                                {isComplete
+                                                    ? "Metadata complete"
+                                                    : "Metadata incomplete"}
+                                            </span>
+                                        </div>
+
+                                        <div className="citation-actions">
+                                            <button
+                                                type="button"
+                                                className="copy-button"
+                                                onClick={() =>
+                                                    copyText(
+                                                        citation,
+                                                        paper.id
+                                                    )
+                                                }
+                                            >
+                                                {copiedId === paper.id
+                                                    ? "✓ Copied"
+                                                    : "Copy Citation"}
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <div className="citation-actions">
+                                    <div className="citation-result">
+                                        <span>GENERATED REFERENCE</span>
+                                        <p>{citation}</p>
+                                    </div>
+
+                                    <div className="citation-intext">
+                                        <div>
+                                            <span>IN-TEXT CITATION</span>
+                                            <strong>
+                                                {inTextCitation}
+                                            </strong>
+                                        </div>
+
                                         <button
                                             type="button"
                                             onClick={() =>
-                                                copyCitation(
-                                                    paper
+                                                copyText(
+                                                    inTextCitation,
+                                                    `intext-${paper.id}`
                                                 )
                                             }
-                                            className="copy-button"
                                         >
-                                            {copiedId === paper.id
-                                                ? "✓ Copied"
+                                            {copiedId ===
+                                            `intext-${paper.id}`
+                                                ? "Copied"
                                                 : "Copy"}
                                         </button>
+                                    </div>
 
+                                    <div className="citation-edit-actions">
                                         <button
                                             type="button"
+                                            className="citation-edit-button"
                                             onClick={() =>
-                                                deleteCitation(
-                                                    paper.id
+                                                setEditingId(
+                                                    editingId === paper.id
+                                                        ? null
+                                                        : paper.id
                                                 )
                                             }
-                                            className="delete-citation-button"
                                         >
-                                            Delete
+                                            {editingId === paper.id
+                                                ? "Close Details"
+                                                : "Edit Bibliographic Details"}
                                         </button>
                                     </div>
-                                </div>
 
-                                <p className="citation-text">
-                                    {generateCitation(paper)}
-                                </p>
-                            </article>
-                        ))}
+                                    {editingId === paper.id && (
+                                        <div className="citation-editor">
+                                            <div className="citation-editor-heading">
+                                                <h4>
+                                                    Bibliographic Details
+                                                </h4>
+
+                                                <p>
+                                                    Enter the details
+                                                    from the original
+                                                    research paper.
+                                                </p>
+                                            </div>
+
+                                            {renderMetadataField(
+                                                paper,
+                                                "authors",
+                                                "Author(s)",
+                                                "e.g. Sharma, A.; Verma, R."
+                                            )}
+
+                                            {renderMetadataField(
+                                                paper,
+                                                "year",
+                                                "Publication Year",
+                                                "e.g. 2024"
+                                            )}
+
+                                            {renderMetadataField(
+                                                paper,
+                                                "title",
+                                                "Paper Title",
+                                                "Enter original paper title"
+                                            )}
+
+                                            {renderMetadataField(
+                                                paper,
+                                                "journal",
+                                                "Journal / Conference",
+                                                "Enter journal name"
+                                            )}
+
+                                            <div className="citation-form-grid">
+                                                {renderMetadataField(
+                                                    paper,
+                                                    "volume",
+                                                    "Volume",
+                                                    "e.g. 12"
+                                                )}
+
+                                                {renderMetadataField(
+                                                    paper,
+                                                    "issue",
+                                                    "Issue",
+                                                    "e.g. 2"
+                                                )}
+
+                                                {renderMetadataField(
+                                                    paper,
+                                                    "pages",
+                                                    "Page Numbers",
+                                                    "e.g. 45-58"
+                                                )}
+                                            </div>
+
+                                            {renderMetadataField(
+                                                paper,
+                                                "doi",
+                                                "DOI",
+                                                "e.g. 10.1234/example"
+                                            )}
+
+                                            {renderMetadataField(
+                                                paper,
+                                                "url",
+                                                "Paper URL",
+                                                "https://example.com/paper"
+                                            )}
+
+                                            <div className="citation-editor-note">
+                                                Details are saved
+                                                automatically in this
+                                                browser.
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                className="citation-save-button"
+                                                onClick={() =>
+                                                    setEditingId(null)
+                                                }
+                                            >
+                                                Save Details
+                                            </button>
+                                        </div>
+                                    )}
+                                </article>
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="citation-empty">
                         <div>📚</div>
 
-                        <h3>No citations found</h3>
+                        <h3>No research papers found</h3>
 
                         <p>
-                            Try searching with a different paper
-                            title, author, or year.
+                            Upload a research paper or try another
+                            search term.
                         </p>
                     </div>
                 )}

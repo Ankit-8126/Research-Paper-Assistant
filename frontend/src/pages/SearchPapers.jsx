@@ -1,114 +1,54 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getPapers } from "../services/api";
 import "../styles/search.css";
 
 function SearchPapers() {
-    const papers = [
-        {
-            id: 1,
-            title: "Artificial Intelligence in Healthcare",
-            authors: "John Smith, Emily Carter",
-            journal: "Journal of Medical Research",
-            year: 2024,
-            category: "Artificial Intelligence",
-            abstract:
-                "An overview of how artificial intelligence is being applied to modern healthcare systems, clinical decision-making, and medical research.",
-        },
-        {
-            id: 2,
-            title: "Machine Learning Research Methods",
-            authors: "David Wilson, Sarah Brown",
-            journal: "International Research Journal",
-            year: 2023,
-            category: "Machine Learning",
-            abstract:
-                "A study of commonly used machine learning research methodologies, evaluation techniques, and experimental practices.",
-        },
-        {
-            id: 3,
-            title: "Deep Learning Applications",
-            authors: "Michael Lee, Robert Taylor",
-            journal: "Computing & Technology Review",
-            year: 2024,
-            category: "Deep Learning",
-            abstract:
-                "An exploration of deep learning applications across computer vision, natural language processing, and intelligent systems.",
-        },
-        {
-            id: 4,
-            title: "Natural Language Processing for Academic Research",
-            authors: "Anna Johnson, Daniel Moore",
-            journal: "Computational Linguistics Review",
-            year: 2022,
-            category: "NLP",
-            abstract:
-                "Research on natural language processing techniques for extracting, organizing, and understanding academic information.",
-        },
-        {
-            id: 5,
-            title: "Data Science in Modern Research",
-            authors: "James Anderson, Olivia Martin",
-            journal: "Data Science Journal",
-            year: 2023,
-            category: "Data Science",
-            abstract:
-                "An introduction to data-driven research methods and the role of data science in modern academic studies.",
-        },
-    ];
-
+    const [papers, setPapers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
-    const [category, setCategory] = useState("All");
-    const [year, setYear] = useState("All");
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
-    const categories = [
-        "All",
-        ...new Set(papers.map((paper) => paper.category)),
-    ];
+    useEffect(() => {
+        const fetchPapers = async () => {
+            try {
+                setLoading(true);
+                setError("");
 
-    const years = [
-        "All",
-        ...new Set(
-            papers
-                .map((paper) => paper.year)
-                .sort((a, b) => b - a)
-        ),
-    ];
+                const data = await getPapers();
+
+                setPapers(data);
+            } catch (error) {
+                console.error(error);
+                setError(
+                    error.message || "Unable to load research papers."
+                );
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPapers();
+    }, []);
 
     const filteredPapers = papers.filter((paper) => {
         const search = searchQuery.toLowerCase().trim();
 
-        const matchesSearch =
-            paper.title.toLowerCase().includes(search) ||
-            paper.authors.toLowerCase().includes(search) ||
-            paper.category.toLowerCase().includes(search) ||
-            paper.journal.toLowerCase().includes(search);
-
-        const matchesCategory =
-            category === "All" || paper.category === category;
-
-        const matchesYear =
-            year === "All" || paper.year.toString() === year.toString();
-
-        return matchesSearch && matchesCategory && matchesYear;
+        return (
+            paper.title?.toLowerCase().includes(search) ||
+            paper.file_name?.toLowerCase().includes(search)
+        );
     });
 
-    const clearFilters = () => {
+    const clearSearch = () => {
         setSearchQuery("");
-        setCategory("All");
-        setYear("All");
     };
-
-    const hasFilters =
-        searchQuery.trim() !== "" ||
-        category !== "All" ||
-        year !== "All";
 
     return (
         <main className="search-page">
 
-            {/* Header */}
             <section className="search-header">
-
                 <div>
                     <span className="search-eyebrow">
                         RESEARCH DISCOVERY
@@ -121,8 +61,9 @@ function SearchPapers() {
                     </h1>
 
                     <p>
-                        Explore academic papers, discover relevant studies,
-                        and build your research library.
+                        Explore your uploaded academic papers,
+                        discover relevant studies, and build your
+                        research library.
                     </p>
                 </div>
 
@@ -131,11 +72,8 @@ function SearchPapers() {
                     <strong>{papers.length}</strong>
                     <small>Available papers</small>
                 </div>
-
             </section>
 
-
-            {/* Search controls */}
             <section className="search-controls">
 
                 <div className="main-search-box">
@@ -143,7 +81,7 @@ function SearchPapers() {
 
                     <input
                         type="text"
-                        placeholder="Search papers, authors, topics, or journals..."
+                        placeholder="Search papers by title or filename..."
                         value={searchQuery}
                         onChange={(e) =>
                             setSearchQuery(e.target.value)
@@ -151,89 +89,57 @@ function SearchPapers() {
                     />
                 </div>
 
-                <div className="search-filter-row">
-
-                    <div className="search-filter">
-                        <label htmlFor="category">
-                            CATEGORY
-                        </label>
-
-                        <select
-                            id="category"
-                            value={category}
-                            onChange={(e) =>
-                                setCategory(e.target.value)
-                            }
-                        >
-                            {categories.map((item) => (
-                                <option key={item} value={item}>
-                                    {item}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="search-filter">
-                        <label htmlFor="year">
-                            YEAR
-                        </label>
-
-                        <select
-                            id="year"
-                            value={year}
-                            onChange={(e) =>
-                                setYear(e.target.value)
-                            }
-                        >
-                            {years.map((item) => (
-                                <option key={item} value={item}>
-                                    {item}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {hasFilters && (
+                {searchQuery.trim() !== "" && (
+                    <div className="search-filter-row">
                         <button
                             type="button"
                             className="clear-search-button"
-                            onClick={clearFilters}
+                            onClick={clearSearch}
                         >
-                            Clear filters
+                            Clear Search
                         </button>
-                    )}
-
-                </div>
+                    </div>
+                )}
 
             </section>
 
-
-            {/* Results heading */}
             <section className="search-results-heading">
 
                 <div>
                     <span>SEARCH RESULTS</span>
 
                     <h2>
-                        {filteredPapers.length}{" "}
-                        {filteredPapers.length === 1
-                            ? "paper"
-                            : "papers"}{" "}
-                        found
+                        {loading
+                            ? "Loading papers..."
+                            : `${filteredPapers.length} ${
+                                filteredPapers.length === 1
+                                    ? "paper"
+                                    : "papers"
+                            } found`}
                     </h2>
                 </div>
 
                 <span className="search-results-description">
-                    Showing papers from the research library
+                    Showing papers from your research library
                 </span>
 
             </section>
 
-
-            {/* Results */}
             <section className="search-results">
 
-                {filteredPapers.length > 0 ? (
+                {loading ? (
+                    <div className="search-empty">
+                        <h2>Loading research papers...</h2>
+                        <p>Please wait while we fetch your papers.</p>
+                    </div>
+
+                ) : error ? (
+                    <div className="search-empty">
+                        <h2>Unable to load papers</h2>
+                        <p>{error}</p>
+                    </div>
+
+                ) : filteredPapers.length > 0 ? (
                     filteredPapers.map((paper, index) => (
                         <article
                             className="search-paper-card"
@@ -247,12 +153,10 @@ function SearchPapers() {
                             <div className="search-paper-content">
 
                                 <div className="search-paper-meta-top">
-                                    <span>
-                                        {paper.category}
-                                    </span>
+                                    <span>Research Paper</span>
 
                                     <span className="search-paper-year">
-                                        {paper.year}
+                                        PDF Document
                                     </span>
                                 </div>
 
@@ -264,22 +168,21 @@ function SearchPapers() {
                                 </Link>
 
                                 <p className="search-paper-authors">
-                                    {paper.authors}
+                                    {paper.file_name}
                                 </p>
 
                                 <p className="search-paper-abstract">
-                                    {paper.abstract}
+                                    Uploaded research paper available
+                                    in your personal research library.
                                 </p>
 
                                 <div className="search-paper-footer">
 
                                     <div className="search-paper-journal">
-                                        <span>
-                                            JOURNAL
-                                        </span>
+                                        <span>DOCUMENT</span>
 
                                         <strong>
-                                            {paper.journal}
+                                            PDF Research Paper
                                         </strong>
                                     </div>
 
@@ -296,6 +199,7 @@ function SearchPapers() {
 
                         </article>
                     ))
+
                 ) : (
                     <div className="search-empty">
 
@@ -304,21 +208,33 @@ function SearchPapers() {
                         </div>
 
                         <h2>
-                            No papers found
+                            {papers.length === 0
+                                ? "No research papers available"
+                                : "No papers found"}
                         </h2>
 
                         <p>
-                            Try changing your search terms or filters
-                            to find relevant research.
+                            {papers.length === 0
+                                ? "Upload a PDF to start building your research library."
+                                : "Try a different search term to find your research papers."}
                         </p>
 
-                        <button
-                            type="button"
-                            className="clear-search-button"
-                            onClick={clearFilters}
-                        >
-                            Reset Search
-                        </button>
+                        {papers.length === 0 ? (
+                            <Link
+                                to="/upload"
+                                className="search-view-button"
+                            >
+                                Upload Paper
+                            </Link>
+                        ) : (
+                            <button
+                                type="button"
+                                className="clear-search-button"
+                                onClick={clearSearch}
+                            >
+                                Reset Search
+                            </button>
+                        )}
 
                     </div>
                 )}

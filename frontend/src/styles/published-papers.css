@@ -1,0 +1,241 @@
+
+.published-page {
+    min-height: calc(100vh - 140px);
+    padding: 50px 7%;
+    background: #f8fafc;
+}
+
+.published-header {
+    max-width: 850px;
+    margin: 0 auto 45px;
+    text-align: center;
+}
+
+.published-label {
+    display: inline-block;
+    margin-bottom: 14px;
+    color: #2563eb;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+}
+
+.published-header h1 {
+    margin-bottom: 14px;
+    color: #0f172a;
+    font-size: 36px;
+}
+
+.published-header > p {
+    margin-bottom: 28px;
+    color: #64748b;
+    line-height: 1.7;
+}
+
+.published-search {
+    display: flex;
+    gap: 10px;
+    padding: 8px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 8px 25px rgba(15, 23, 42, 0.05);
+}
+
+.published-search input {
+    flex: 1;
+    min-width: 0;
+    padding: 13px;
+    border: none;
+    outline: none;
+    color: #0f172a;
+    font-size: 15px;
+}
+
+.published-search button,
+.read-paper-btn,
+.pdf-paper-btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.published-search button:hover,
+.read-paper-btn:hover {
+    background: #1d4ed8;
+}
+
+.published-search button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.published-examples {
+    margin-top: 14px;
+    color: #94a3b8;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.published-results {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+.published-results-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.published-results-heading h2 {
+    color: #0f172a;
+    font-size: 22px;
+}
+
+.published-results-heading span {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.published-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.published-card {
+    padding: 25px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(15, 23, 42, 0.03);
+}
+
+.published-card-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.published-year {
+    color: #64748b;
+    font-size: 13px;
+}
+
+.open-access {
+    padding: 5px 9px;
+    border-radius: 20px;
+    background: #dcfce7;
+    color: #15803d;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.published-card h3 {
+    margin-bottom: 10px;
+    color: #0f172a;
+    font-size: 19px;
+    line-height: 1.5;
+}
+
+.published-authors {
+    margin-bottom: 12px;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.published-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin-bottom: 20px;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.published-abstract h4 {
+    margin-bottom: 8px;
+    color: #334155;
+    font-size: 14px;
+}
+
+.published-abstract p {
+    color: #64748b;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.published-doi {
+    margin-top: 15px;
+    color: #64748b;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.published-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.pdf-paper-btn {
+    background: #0f766e;
+}
+
+.pdf-paper-btn:hover {
+    background: #115e59;
+}
+
+.published-message {
+    padding: 35px 20px;
+    text-align: center;
+    color: #64748b;
+    background: white;
+    border: 1px dashed #cbd5e1;
+    border-radius: 12px;
+}
+
+.published-error {
+    padding: 15px;
+    color: #b91c1c;
+    background: #fee2e2;
+    border-radius: 8px;
+}
+
+@media (max-width: 600px) {
+    .published-page {
+        padding: 35px 16px;
+    }
+
+    .published-header h1 {
+        font-size: 27px;
+    }
+
+    .published-search {
+        flex-direction: column;
+    }
+
+    .published-search button {
+        width: 100%;
+    }
+
+    .published-card {
+        padding: 18px;
+    }
+
+    .published-results-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}

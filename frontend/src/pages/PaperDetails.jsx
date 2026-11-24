@@ -1,90 +1,260 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import "../styles/paper-details.css";
+
+import {
+    getPapers,
+    extractPaperText,
+    getPaperSummary,
+    getPaperKeyPoints,
+    getPaperPdf,
+} from "../services/api";
+
+// Render Markdown bold text
+function renderBoldText(text) {
+    const cleanedText = text
+        .split("\n")
+        .map((line) => {
+            const boldCount = (line.match(/\*\*/g) || []).length;
+
+            if (boldCount % 2 !== 0) {
+                line = line.replace(/\*\*(?![\s\S]*\*\*)/, "");
+            }
+
+            return line.replace(/(?<!\*)\*(?!\*)/g, "");
+        })
+        .join("\n");
+
+    const parts = cleanedText.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+            return (
+                <strong key={index}>
+                    {part.slice(2, -2)}
+                </strong>
+            );
+        }
+
+        return part;
+    });
+}
+
+// Split AI summary into separate sections
+function formatSummary(summary) {
+    if (!summary) return [];
+
+    return summary
+        .replace(/\r/g, "")
+        .split(/(?=\*\*\s*\d+\.\s*[^*]+\*\*)/g)
+        .map((section) => section.trim())
+        .filter((section) => section.length > 0);
+}
+
+// Clean and format AI key points
+function formatKeyPoints(points) {
+    if (!points) return [];
+
+    const pointList = Array.isArray(points)
+        ? points
+        : points.split("\n");
+
+    const formattedPoints = pointList
+        .map((point) => {
+            return String(point)
+                .replace(/\*\*/g, "")
+                .replace(/^[\s\-*•\d.)]+/, "")
+                .trim();
+        })
+        .filter((point) => {
+            if (!point) return false;
+
+            const heading =
+                /^(main contributions|key findings|research limitations|conclusion)\s*:?\s*$/i;
+
+            return !heading.test(point);
+        });
+
+    return formattedPoints;
+}
 
 function PaperDetails() {
     const { id } = useParams();
 
-    const papers = {
-        1: {
-            title: "Artificial Intelligence in Healthcare",
-            authors: "John Smith, Emily Carter",
-            journal: "Journal of Medical Research",
-            year: 2024,
-            category: "Artificial Intelligence",
-            abstract:
-                "This paper explores the growing role of artificial intelligence in modern healthcare. It examines applications including clinical decision support, medical image analysis, patient monitoring, and predictive healthcare systems.",
-            keywords: [
-                "Artificial Intelligence",
-                "Healthcare",
-                "Machine Learning",
-                "Clinical Decision Support",
-            ],
-            findings: [
-                "AI can support clinical decision-making and healthcare workflows.",
-                "Machine learning models are increasingly used for medical data analysis.",
-                "Successful implementation requires attention to data quality and system reliability.",
-            ],
-        },
+    const [paper, setPaper] = useState(null);
+    const [summary, setSummary] = useState("");
+    const [keyPoints, setKeyPoints] = useState([]);
 
-        2: {
-            title: "Machine Learning Research Methods",
-            authors: "David Wilson, Sarah Brown",
-            journal: "International Research Journal",
-            year: 2023,
-            category: "Machine Learning",
-            abstract:
-                "This study presents commonly used research methodologies for machine learning projects. It discusses dataset preparation, model evaluation, experimental design, and reproducibility in machine learning research.",
-            keywords: [
-                "Machine Learning",
-                "Research Methods",
-                "Evaluation",
-                "Data Analysis",
-            ],
-            findings: [
-                "Dataset quality has a major influence on experimental outcomes.",
-                "Evaluation metrics should match the research objective.",
-                "Reproducible experiments improve the reliability of research findings.",
-            ],
-        },
-
-        3: {
-            title: "Deep Learning Applications",
-            authors: "Michael Lee, Robert Taylor",
-            journal: "Computing & Technology Review",
-            year: 2024,
-            category: "Deep Learning",
-            abstract:
-                "This paper examines the use of deep learning across computer vision, natural language processing, and intelligent systems. It highlights common architectures, applications, and practical research considerations.",
-            keywords: [
-                "Deep Learning",
-                "Neural Networks",
-                "Computer Vision",
-                "NLP",
-            ],
-            findings: [
-                "Deep neural networks can learn complex representations from large datasets.",
-                "Transfer learning can reduce the amount of task-specific training required.",
-                "Model performance depends on architecture, data, and evaluation methodology.",
-            ],
-        },
-    };
-
-    const paper = papers[id];
+    const [pdfUrl, setPdfUrl] = useState("");
+    const [pdfLoading, setPdfLoading] = useState(true);
+    const [pdfError, setPdfError] = useState("");
 
     const [saved, setSaved] = useState(false);
     const [citation, setCitation] = useState("");
     const [copied, setCopied] = useState(false);
 
+    const [loading, setLoading] = useState(true);
+    const [analyzing, setAnalyzing] = useState(false);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        const loadPaper = async () => {
+            try {
+                setLoading(true);
+                setError("");
+
+                setPaper(null);
+                setSummary("");
+                setKeyPoints([]);
+
+                setPdfUrl("");
+                setPdfLoading(true);
+                setPdfError("");
+
+                const papers = await getPapers();
+
+                let selectedPaper = null;
+
+                for (const item of papers) {
+                    if (String(item.id) === String(id)) {
+                        selectedPaper = item;
+                        break;
+                    }
+                }
+
+                if (!selectedPaper) {
+                    setError("Paper not found.");
+                    return;
+                }
+
+                setPaper(selectedPaper);
+                setAnalyzing(true);
+
+                // Fetch original PDF
+                try {
+                    const pdfBlob = await getPaperPdf(id);
+                    const objectUrl = URL.createObjectURL(pdfBlob);
+
+                    setPdfUrl(objectUrl);
+                } catch (pdfErr) {
+                    setPdfError(
+                        pdfErr.message || "Unable to load PDF."
+                    );
+                } finally {
+                    setPdfLoading(false);
+                }
+
+                // Extract text from uploaded PDF
+                await extractPaperText(id);
+
+                // Generate AI summary and key points
+                const results = await Promise.allSettled([
+                    getPaperSummary(id),
+                    getPaperKeyPoints(id),
+                ]);
+
+                if (results[0].status === "fulfilled") {
+                    setSummary(results[0].value.summary || "");
+                }
+
+                if (results[1].status === "fulfilled") {
+                    const points =
+                        results[1].value.key_points || "";
+
+                    setKeyPoints(formatKeyPoints(points));
+                }
+
+                if (
+                    results[0].status === "rejected" &&
+                    results[1].status === "rejected"
+                ) {
+                    setError(
+                        "PDF extracted, but AI analysis could not be generated. Please try again."
+                    );
+                }
+            } catch (err) {
+                setError(
+                    err.message || "Unable to load this paper."
+                );
+            } finally {
+                setLoading(false);
+                setAnalyzing(false);
+            }
+        };
+
+        loadPaper();
+
+        return () => {
+            setPdfUrl((currentUrl) => {
+                if (currentUrl) {
+                    URL.revokeObjectURL(currentUrl);
+                }
+
+                return "";
+            });
+        };
+    }, [id]);
+
+    // Generate citation
+    const generateCitation = () => {
+        if (!paper) return;
+
+        const title =
+            paper.title || paper.file_name || "Research Paper";
+
+        const generatedCitation =
+            `${title}. Research Paper Assistant.`;
+
+        setCitation(generatedCitation);
+        setCopied(false);
+    };
+
+    // Copy citation
+    const copyCitation = async () => {
+        if (!citation) return;
+
+        try {
+            await navigator.clipboard.writeText(citation);
+
+            setCopied(true);
+
+            setTimeout(() => {
+                setCopied(false);
+            }, 1800);
+        } catch {
+            setCopied(false);
+        }
+    };
+
+    // Loading screen
+    if (loading) {
+        return (
+            <main className="paper-details-page">
+                <section className="paper-not-found">
+                    <h1>Loading Research Paper...</h1>
+
+                    <p>
+                        Please wait while we load your paper
+                        and generate AI analysis.
+                    </p>
+                </section>
+            </main>
+        );
+    }
+
+    // Paper not found
     if (!paper) {
         return (
             <main className="paper-details-page">
                 <section className="paper-not-found">
                     <span>RESEARCH PAPER</span>
+
                     <h1>Paper not found</h1>
+
                     <p>
-                        The research paper you are looking for could not be
-                        found in the current research library.
+                        {error ||
+                            "The research paper could not be found in your library."}
                     </p>
 
                     <Link
@@ -98,28 +268,7 @@ function PaperDetails() {
         );
     }
 
-    const generateCitation = () => {
-        const generatedCitation =
-            `${paper.authors}. (${paper.year}). ${paper.title}. ${paper.journal}.`;
-
-        setCitation(generatedCitation);
-        setCopied(false);
-    };
-
-    const copyCitation = async () => {
-        if (!citation) return;
-
-        try {
-            await navigator.clipboard.writeText(citation);
-            setCopied(true);
-
-            setTimeout(() => {
-                setCopied(false);
-            }, 1800);
-        } catch {
-            setCopied(false);
-        }
-    };
+    const summarySections = formatSummary(summary);
 
     return (
         <main className="paper-details-page">
@@ -131,24 +280,25 @@ function PaperDetails() {
                 <span>Paper Details</span>
             </div>
 
-
-            {/* Main paper header */}
+            {/* Paper Header */}
             <section className="paper-details-header">
 
                 <div className="paper-details-category">
-                    {paper.category}
+                    RESEARCH PAPER
                 </div>
 
-                <h1>{paper.title}</h1>
+                <h1>
+                    {paper.title || paper.file_name}
+                </h1>
 
                 <p className="paper-details-authors">
-                    {paper.authors}
+                    Uploaded PDF: {paper.file_name}
                 </p>
 
                 <div className="paper-details-meta">
-                    <span>{paper.journal}</span>
+                    <span>Research Paper Assistant</span>
                     <span>•</span>
-                    <span>{paper.year}</span>
+                    <span>Paper ID: {paper.id}</span>
                 </div>
 
                 <div className="paper-details-actions">
@@ -162,7 +312,9 @@ function PaperDetails() {
                         }
                         onClick={() => setSaved(!saved)}
                     >
-                        {saved ? "Saved to Research" : "Save to Research"}
+                        {saved
+                            ? "Saved to Research"
+                            : "Save to Research"}
                     </button>
 
                     <Link
@@ -176,112 +328,209 @@ function PaperDetails() {
 
             </section>
 
-
-            {/* Paper layout */}
+            {/* Paper Layout */}
             <section className="paper-details-layout">
 
-                {/* Main content */}
+                {/* Main Content */}
                 <article className="paper-details-main">
 
+                    {error && (
+                        <div className="paper-content-section">
+                            <p>{error}</p>
+                        </div>
+                    )}
+
+                    {/* AI Summary */}
                     <section className="paper-content-section">
+
                         <span className="paper-section-label">
-                            ABSTRACT
+                            AI SUMMARY
                         </span>
 
                         <h2>About this research</h2>
 
-                        <p className="paper-abstract">
-                            {paper.abstract}
-                        </p>
+                        {analyzing && !summary ? (
+                            <p className="paper-abstract">
+                                Generating AI summary...
+                            </p>
+                        ) : summarySections.length > 0 ? (
+                            <div className="paper-abstract">
+                                {summarySections.map(
+                                    (section, index) => {
+                                        const headingMatch =
+                                            section.match(
+                                                /^\*\*\s*\d+\.\s*(.*?)\*\*\s*/
+                                            );
+
+                                        const heading = headingMatch
+                                            ? headingMatch[1]
+                                            : "";
+
+                                        const content = headingMatch
+                                            ? section
+                                                .slice(headingMatch[0].length)
+                                                .trim()
+                                            : section;
+
+                                        return (
+                                            <p key={index}>
+                                                {heading && (
+                                                    <>
+                                                        <strong>
+                                                            {heading}
+                                                        </strong>
+                                                        {" "}
+                                                    </>
+                                                )}
+
+                                                {renderBoldText(content)}
+                                            </p>
+                                        );
+                                    }
+                                )}
+                            </div>
+                        ) : (
+                            <p className="paper-abstract">
+                                AI summary is not available.
+                            </p>
+                        )}
+
                     </section>
 
-
+                    {/* Key Findings */}
                     <section className="paper-content-section">
+
                         <span className="paper-section-label">
                             KEY FINDINGS
                         </span>
 
-                        <h2>Research findings</h2>
+                        <h2>Research key points</h2>
 
-                        <div className="paper-findings">
-                            {paper.findings.map((finding, index) => (
-                                <div
-                                    className="paper-finding"
-                                    key={index}
-                                >
-                                    <span>
-                                        {String(index + 1).padStart(2, "0")}
-                                    </span>
+                        {analyzing && keyPoints.length === 0 ? (
+                            <p>Generating key points...</p>
+                        ) : keyPoints.length > 0 ? (
+                            <div className="paper-findings">
 
-                                    <p>{finding}</p>
-                                </div>
-                            ))}
-                        </div>
+                                {keyPoints.map((point, index) => (
+                                    <div
+                                        className="paper-finding"
+                                        key={index}
+                                    >
+                                        <span>
+                                            {String(index + 1).padStart(2, "0")}
+                                        </span>
+
+                                        <p>
+                                            {renderBoldText(point)}
+                                        </p>
+                                    </div>
+                                ))}
+
+                            </div>
+                        ) : (
+                            <p>Key points are not available.</p>
+                        )}
+
                     </section>
 
-
+                    {/* Uploaded Document */}
                     <section className="paper-content-section">
+
                         <span className="paper-section-label">
-                            KEYWORDS
+                            DOCUMENT
                         </span>
 
-                        <h2>Research topics</h2>
+                        <h2>Uploaded research paper</h2>
 
                         <div className="paper-keywords">
-                            {paper.keywords.map((keyword) => (
-                                <span key={keyword}>
-                                    {keyword}
-                                </span>
-                            ))}
+                            <span>{paper.file_name}</span>
                         </div>
+
+                        <div className="paper-document-actions">
+
+                            {pdfLoading ? (
+                                <p>Loading PDF...</p>
+                            ) : pdfError ? (
+                                <p>{pdfError}</p>
+                            ) : pdfUrl ? (
+                                <>
+                                    <a
+                                        href={pdfUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="paper-details-primary-button"
+                                    >
+                                        View PDF
+                                    </a>
+
+                                    <a
+                                        href={pdfUrl}
+                                        download={paper.file_name}
+                                        className="paper-details-secondary-button"
+                                    >
+                                        Download PDF
+                                    </a>
+                                </>
+                            ) : (
+                                <p>PDF is not available.</p>
+                            )}
+
+                        </div>
+
                     </section>
 
                 </article>
 
-
                 {/* Sidebar */}
                 <aside className="paper-details-sidebar">
 
+                    {/* Paper Information */}
                     <div className="paper-sidebar-card">
+
                         <span className="paper-sidebar-label">
                             PAPER INFORMATION
                         </span>
 
                         <div className="paper-info-row">
                             <span>Category</span>
-                            <strong>{paper.category}</strong>
+                            <strong>Research Paper</strong>
                         </div>
 
                         <div className="paper-info-row">
-                            <span>Published</span>
-                            <strong>{paper.year}</strong>
-                        </div>
-
-                        <div className="paper-info-row">
-                            <span>Journal</span>
-                            <strong>{paper.journal}</strong>
+                            <span>File Name</span>
+                            <strong>{paper.file_name}</strong>
                         </div>
 
                         <div className="paper-info-row">
                             <span>Paper ID</span>
-                            <strong>#{id}</strong>
+                            <strong>#{paper.id}</strong>
                         </div>
+
+                        <div className="paper-info-row">
+                            <span>Analysis</span>
+                            <strong>
+                                {analyzing
+                                    ? "In Progress"
+                                    : summary || keyPoints.length > 0
+                                        ? "Completed"
+                                        : "Unavailable"}
+                            </strong>
+                        </div>
+
                     </div>
 
-
+                    {/* Citation */}
                     <div className="paper-sidebar-card citation-card">
 
                         <span className="paper-sidebar-label">
                             CITATION
                         </span>
 
-                        <h3>
-                            Generate reference
-                        </h3>
+                        <h3>Generate reference</h3>
 
                         <p>
-                            Create a formatted reference for this
-                            research paper.
+                            Create a basic reference for this
+                            uploaded research paper.
                         </p>
 
                         <button
@@ -312,7 +561,7 @@ function PaperDetails() {
 
                     </div>
 
-
+                    {/* Research AI */}
                     <div className="paper-sidebar-card ai-card">
 
                         <span className="paper-sidebar-label">
@@ -341,8 +590,7 @@ function PaperDetails() {
 
             </section>
 
-
-            {/* Bottom navigation */}
+            {/* Bottom Navigation */}
             <section className="paper-details-bottom">
 
                 <div>
@@ -353,8 +601,8 @@ function PaperDetails() {
                     </h2>
 
                     <p>
-                        Discover related studies and continue building
-                        your research library.
+                        Discover related studies and continue
+                        building your research library.
                     </p>
                 </div>
 

@@ -1,37 +1,48 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import "../styles/tracker.css";
 
+const defaultTasks = [
+    {
+        id: 1,
+        title: "Collect research papers",
+        description: "Find relevant papers for the research topic.",
+        status: "Completed",
+    },
+    {
+        id: 2,
+        title: "Read selected papers",
+        description: "Read and understand the important research studies.",
+        status: "In Progress",
+    },
+    {
+        id: 3,
+        title: "Prepare literature review",
+        description: "Compare findings and organize the literature review.",
+        status: "Pending",
+    },
+    {
+        id: 4,
+        title: "Generate citations",
+        description: "Prepare citations for all selected research papers.",
+        status: "Pending",
+    },
+];
+
 function Tracker() {
-    const [tasks, setTasks] = useState([
-        {
-            id: 1,
-            title: "Collect research papers",
-            description:
-                "Find relevant papers for the research topic.",
-            status: "Completed",
-        },
-        {
-            id: 2,
-            title: "Read selected papers",
-            description:
-                "Read and understand the important research studies.",
-            status: "In Progress",
-        },
-        {
-            id: 3,
-            title: "Prepare literature review",
-            description:
-                "Compare findings and organize the literature review.",
-            status: "Pending",
-        },
-        {
-            id: 4,
-            title: "Generate citations",
-            description:
-                "Prepare citations for all selected research papers.",
-            status: "Pending",
-        },
-    ]);
+    const [tasks, setTasks] = useState(() => {
+        const savedTasks = localStorage.getItem("researchTrackerTasks");
+
+        if (savedTasks) {
+            try {
+                return JSON.parse(savedTasks);
+            } catch {
+                return defaultTasks;
+            }
+        }
+
+        return defaultTasks;
+    });
 
     const [showForm, setShowForm] = useState(false);
 
@@ -40,6 +51,13 @@ function Tracker() {
         description: "",
         status: "Pending",
     });
+
+    useEffect(() => {
+        localStorage.setItem(
+            "researchTrackerTasks",
+            JSON.stringify(tasks)
+        );
+    }, [tasks]);
 
     const toggleTask = (id) => {
         setTasks((prevTasks) =>
@@ -211,6 +229,7 @@ function Tracker() {
                                 placeholder="e.g. Analyze research findings"
                                 value={newTask.title}
                                 onChange={handleInputChange}
+                                required
                             />
                         </div>
 
@@ -268,25 +287,23 @@ function Tracker() {
                         tasks.map((task) => (
                             <article
                                 key={task.id}
-                                className={`task-card ${task.status === "Completed"
+                                className={`task-card ${
+                                    task.status === "Completed"
                                         ? "task-completed"
                                         : ""
-                                    }`}
+                                }`}
                             >
                                 <button
                                     type="button"
                                     className="task-checkbox"
-                                    onClick={() =>
-                                        toggleTask(task.id)
-                                    }
-                                    aria-label={`Mark ${task.title} as ${task.status === "Completed"
+                                    onClick={() => toggleTask(task.id)}
+                                    aria-label={`Mark ${task.title} as ${
+                                        task.status === "Completed"
                                             ? "pending"
                                             : "completed"
-                                        }`}
+                                    }`}
                                 >
-                                    {task.status === "Completed"
-                                        ? "✓"
-                                        : ""}
+                                    {task.status === "Completed" ? "✓" : ""}
                                 </button>
 
                                 <div className="task-content">

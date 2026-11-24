@@ -3,3 +3,28 @@ __pycache__/
 *.pyc
 *.db
 .env
+# Environment files
+.env.*
+!.env.example
+
+# Uploaded research papers
+backend/uploads/
+
+# Temporary and testing files
+frontend/-r
+backend/test_groq.py
+
+# Unused root-level CSS copies
+/auth.css
+/chat-assistant.css
+/citation-manager.css
+/dashboard.css
+/footer.css
+/home.css
+/literature-review.css
+/my-research.css
+/navbar.css
+/paper-details.css
+/pdf-upload.css
+/search.css
+/tracker.css
