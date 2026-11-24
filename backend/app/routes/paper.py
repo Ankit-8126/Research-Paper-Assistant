@@ -29,7 +29,7 @@ from app.services.chat_service import (
 router = APIRouter(prefix="/papers", tags=["Papers"])
 
 
-UPLOAD_DIR = "uploads/papers"
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 

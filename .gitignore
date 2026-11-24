@@ -28,3 +28,4 @@ backend/test_groq.py
 /pdf-upload.css
 /search.css
 /tracker.css
+frontend/dist/
