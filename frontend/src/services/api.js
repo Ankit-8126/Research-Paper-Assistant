@@ -132,3 +132,10 @@ export const getPaperPdf = async (paperId) => {
 
     return await response.blob();
 };
+
+export const updatePaperStatus = (paperId, status) => {
+    return apiRequest(`/papers/${paperId}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+    });
+};

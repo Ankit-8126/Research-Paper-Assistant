@@ -25,8 +25,23 @@ from app.services.chat_service import (
     clear_chat_history
 )
 
+from pydantic import BaseModel
+from typing import Literal
+
 
 router = APIRouter(prefix="/papers", tags=["Papers"])
+
+class PaperStatusUpdate(BaseModel):
+    status: Literal[
+        "In Progress",
+        "Ready for Review",
+        "Submitted",
+        "Under Review",
+        "Revision Required",
+        "Accepted",
+        "Rejected",
+        "Published"
+    ]
 
 
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads/papers")
@@ -72,6 +87,7 @@ def upload_paper(
     }
 
 
+
 @router.get("/")
 def get_papers(
     user_id: int = Depends(get_current_user),
@@ -80,6 +96,7 @@ def get_papers(
     papers = (
         db.query(Paper)
         .filter(Paper.user_id == user_id)
+        .order_by(Paper.created_at.desc())
         .all()
     )
 
@@ -88,10 +105,44 @@ def get_papers(
             "id": paper.id,
             "title": paper.title,
             "file_name": paper.file_name,
-            "file_path": paper.file_path
+            "file_path": paper.file_path,
+            "status": paper.status,
+            "created_at": paper.created_at.isoformat() if paper.created_at else None
         }
         for paper in papers
     ]
+
+
+
+
+@router.patch("/{paper_id}/status")
+def update_paper_status(
+    paper_id: int,
+    status_data: PaperStatusUpdate,
+    user_id: int = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    paper = db.query(Paper).filter(
+        Paper.id == paper_id,
+        Paper.user_id == user_id
+    ).first()
+
+    if not paper:
+        raise HTTPException(
+            status_code=404,
+            detail="Paper not found"
+        )
+
+    paper.status = status_data.status
+
+    db.commit()
+    db.refresh(paper)
+
+    return {
+        "message": "Paper status updated successfully",
+        "paper_id": paper.id,
+        "status": paper.status
+    }
 
 
 

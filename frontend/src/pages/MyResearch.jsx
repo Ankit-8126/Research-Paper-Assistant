@@ -1,50 +1,103 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { getPapers } from "../services/api";
+import {
+    getPapers,
+    updatePaperStatus
+} from "../services/api";
+
 import "../styles/my-research.css";
+
+const PAPER_STATUSES = [
+    "In Progress",
+    "Ready for Review",
+    "Submitted",
+    "Under Review",
+    "Revision Required",
+    "Accepted",
+    "Rejected",
+    "Published"
+];
 
 function MyResearch() {
     const [savedPapers, setSavedPapers] = useState([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [updatingPaper, setUpdatingPaper] = useState(null);
 
     useEffect(() => {
-        const fetchPapers = async () => {
-            try {
-                const data = await getPapers();
-
-                const formattedPapers = data.map((paper) => ({
-                    id: paper.id,
-                    title: paper.title,
-                    file_name: paper.file_name,
-                    category: "Research Paper",
-                    status: "Saved",
-                }));
-
-                setSavedPapers(formattedPapers);
-
-            } catch (error) {
-                console.error(error);
-                setError(error.message || "Unable to load research papers.");
-            } finally {
-                setLoading(false);
-            }
-        };
-
         fetchPapers();
     }, []);
+
+    const fetchPapers = async () => {
+        try {
+            setLoading(true);
+            setError("");
+
+            const data = await getPapers();
+            setSavedPapers(data);
+
+        } catch (error) {
+            console.error(error);
+            setError(
+                error.message || "Unable to load research papers."
+            );
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStatusChange = async (paperId, newStatus) => {
+        try {
+            setUpdatingPaper(paperId);
+
+            await updatePaperStatus(paperId, newStatus);
+
+            setSavedPapers((previousPapers) =>
+                previousPapers.map((paper) =>
+                    paper.id === paperId
+                        ? { ...paper, status: newStatus }
+                        : paper
+                )
+            );
+
+        } catch (error) {
+            console.error(error);
+            alert(error.message || "Unable to update paper status.");
+        } finally {
+            setUpdatingPaper(null);
+        }
+    };
+
+    const formatDate = (date) => {
+        if (!date) return "Date unavailable";
+
+        return new Date(date).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+        });
+    };
 
     const filteredPapers = savedPapers.filter((paper) => {
         const search = searchQuery.toLowerCase();
 
         return (
-            paper.title.toLowerCase().includes(search) ||
-            paper.file_name.toLowerCase().includes(search) ||
-            paper.category.toLowerCase().includes(search)
+            (paper.title || "").toLowerCase().includes(search) ||
+            (paper.file_name || "").toLowerCase().includes(search) ||
+            "research paper".includes(search)
         );
     });
+
+    const inReviewCount = savedPapers.filter((paper) =>
+        ["Ready for Review", "Submitted", "Under Review", "Revision Required"]
+            .includes(paper.status)
+    ).length;
+
+    const publishedCount = savedPapers.filter(
+        (paper) => paper.status === "Published"
+    ).length;
 
     return (
         <main className="my-research-page">
@@ -79,13 +132,13 @@ function MyResearch() {
                 </div>
 
                 <div className="research-summary-item">
-                    <span>Saved</span>
-                    <strong>{savedPapers.length}</strong>
+                    <span>In Review</span>
+                    <strong>{inReviewCount}</strong>
                 </div>
 
                 <div className="research-summary-item">
-                    <span>In Review</span>
-                    <strong>0</strong>
+                    <span>Published</span>
+                    <strong>{publishedCount}</strong>
                 </div>
 
             </section>
@@ -122,6 +175,10 @@ function MyResearch() {
                     <div className="my-research-empty">
                         <h2>Unable to load papers</h2>
                         <p>{error}</p>
+
+                        <button onClick={fetchPapers}>
+                            Try Again
+                        </button>
                     </div>
 
                 ) : filteredPapers.length > 0 ? (
@@ -142,11 +199,11 @@ function MyResearch() {
                                 <div className="research-paper-top">
 
                                     <span className="research-paper-category">
-                                        {paper.category}
+                                        Research Paper
                                     </span>
 
-                                    <span className="research-paper-status status-saved">
-                                        {paper.status}
+                                    <span className="research-paper-status">
+                                        {paper.status || "In Progress"}
                                     </span>
 
                                 </div>
@@ -164,6 +221,42 @@ function MyResearch() {
 
                                 <div className="research-paper-meta">
                                     <span>PDF Document</span>
+                                    <span>
+                                        Uploaded: {formatDate(paper.created_at)}
+                                    </span>
+                                </div>
+
+                                <div className="paper-status-control">
+
+                                    <label htmlFor={`status-${paper.id}`}>
+                                        Update Status
+                                    </label>
+
+                                    <select
+                                        id={`status-${paper.id}`}
+                                        value={paper.status || "In Progress"}
+                                        disabled={updatingPaper === paper.id}
+                                        onChange={(e) =>
+                                            handleStatusChange(
+                                                paper.id,
+                                                e.target.value
+                                            )
+                                        }
+                                    >
+                                        {PAPER_STATUSES.map((status) => (
+                                            <option
+                                                key={status}
+                                                value={status}
+                                            >
+                                                {status}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    {updatingPaper === paper.id && (
+                                        <span>Saving...</span>
+                                    )}
+
                                 </div>
 
                             </div>

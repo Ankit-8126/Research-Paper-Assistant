@@ -1,148 +1,106 @@
 
 import { useEffect, useState } from "react";
+import { getPapers } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 import "../styles/tracker.css";
 
-const defaultTasks = [
-    {
-        id: 1,
-        title: "Collect research papers",
-        description: "Find relevant papers for the research topic.",
-        status: "Completed",
-    },
-    {
-        id: 2,
-        title: "Read selected papers",
-        description: "Read and understand the important research studies.",
-        status: "In Progress",
-    },
-    {
-        id: 3,
-        title: "Prepare literature review",
-        description: "Compare findings and organize the literature review.",
-        status: "Pending",
-    },
-    {
-        id: 4,
-        title: "Generate citations",
-        description: "Prepare citations for all selected research papers.",
-        status: "Pending",
-    },
+const inReviewStatuses = [
+    "Ready for Review",
+    "Submitted",
+    "Under Review",
+    "Revision Required",
 ];
 
 function Tracker() {
-    const [tasks, setTasks] = useState(() => {
-        const savedTasks = localStorage.getItem("researchTrackerTasks");
+    const { user } = useAuth();
 
-        if (savedTasks) {
-            try {
-                return JSON.parse(savedTasks);
-            } catch {
-                return defaultTasks;
-            }
-        }
-
-        return defaultTasks;
-    });
-
-    const [showForm, setShowForm] = useState(false);
-
-    const [newTask, setNewTask] = useState({
-        title: "",
-        description: "",
-        status: "Pending",
-    });
+    const [papers, setPapers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
 
     useEffect(() => {
-        localStorage.setItem(
-            "researchTrackerTasks",
-            JSON.stringify(tasks)
-        );
-    }, [tasks]);
+        let isActive = true;
 
-    const toggleTask = (id) => {
-        setTasks((prevTasks) =>
-            prevTasks.map((task) =>
-                task.id === id
-                    ? {
-                        ...task,
-                        status:
-                            task.status === "Completed"
-                                ? "Pending"
-                                : "Completed",
-                    }
-                    : task
-            )
-        );
-    };
+        const fetchPapers = async () => {
+            try {
+                setLoading(true);
+                setError("");
 
-    const updateTaskStatus = (id, newStatus) => {
-        setTasks((prevTasks) =>
-            prevTasks.map((task) =>
-                task.id === id
-                    ? { ...task, status: newStatus }
-                    : task
-            )
-        );
-    };
+                const data = await getPapers();
 
-    const deleteTask = (id) => {
-        setTasks((prevTasks) =>
-            prevTasks.filter((task) => task.id !== id)
-        );
-    };
-
-    const handleInputChange = (e) => {
-        const { name, value } = e.target;
-
-        setNewTask((prevTask) => ({
-            ...prevTask,
-            [name]: value,
-        }));
-    };
-
-    const addTask = (e) => {
-        e.preventDefault();
-
-        if (!newTask.title.trim()) {
-            return;
-        }
-
-        const task = {
-            id: Date.now(),
-            title: newTask.title.trim(),
-            description:
-                newTask.description.trim() ||
-                "No description added.",
-            status: newTask.status,
+                if (isActive) {
+                    setPapers(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                if (isActive) {
+                    setError(err.message || "Unable to load research papers.");
+                }
+            } finally {
+                if (isActive) {
+                    setLoading(false);
+                }
+            }
         };
 
-        setTasks((prevTasks) => [...prevTasks, task]);
+        if (user?.user_id || user?.id) {
+            fetchPapers();
+        } else {
+            setPapers([]);
+            setLoading(false);
+        }
 
-        setNewTask({
-            title: "",
-            description: "",
-            status: "Pending",
+        return () => {
+            isActive = false;
+        };
+    }, [user?.user_id, user?.id]);
+
+    const totalPapers = papers.length;
+
+    const inProgress = papers.filter(
+        (paper) => paper.status === "In Progress"
+    ).length;
+
+    const inReview = papers.filter(
+        (paper) => inReviewStatuses.includes(paper.status)
+    ).length;
+
+    const published = papers.filter(
+        (paper) => paper.status === "Published"
+    ).length;
+
+    const progress = totalPapers === 0
+        ? 0
+        : Math.round((published / totalPapers) * 100);
+
+    const formatDate = (date) => {
+        if (!date) return "Date unavailable";
+
+        return new Date(date).toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
         });
-
-        setShowForm(false);
     };
 
-    const completedTasks = tasks.filter(
-        (task) => task.status === "Completed"
-    ).length;
+    if (loading) {
+        return (
+            <main className="tracker-page">
+                <p>Loading your research papers...</p>
+            </main>
+        );
+    }
 
-    const inProgressTasks = tasks.filter(
-        (task) => task.status === "In Progress"
-    ).length;
-
-    const remainingTasks = tasks.filter(
-        (task) => task.status !== "Completed"
-    ).length;
-
-    const progress =
-        tasks.length === 0
-            ? 0
-            : Math.round((completedTasks / tasks.length) * 100);
+    if (error) {
+        return (
+            <main className="tracker-page">
+                <h2>Unable to load Tracker</h2>
+                <p>{error}</p>
+                <button onClick={() => window.location.reload()}>
+                    Try Again
+                </button>
+            </main>
+        );
+    }
 
     return (
         <main className="tracker-page">
@@ -155,226 +113,91 @@ function Tracker() {
                     <h1>Track Your Research Progress</h1>
 
                     <p>
-                        Organize your research tasks and keep track
-                        of important milestones.
+                        Monitor your research papers and their
+                        current progress.
                     </p>
                 </div>
 
                 <div className="progress-circle">
                     <strong>{progress}%</strong>
-                    <span>Complete</span>
+                    <span>Published</span>
                 </div>
             </div>
 
             <section className="tracker-overview">
                 <div className="tracker-stat">
-                    <span>📋</span>
-                    <strong>{tasks.length}</strong>
-                    <p>Total Tasks</p>
-                </div>
-
-                <div className="tracker-stat">
-                    <span>✅</span>
-                    <strong>{completedTasks}</strong>
-                    <p>Completed</p>
+                    <span>📚</span>
+                    <strong>{totalPapers}</strong>
+                    <p>Total Papers</p>
                 </div>
 
                 <div className="tracker-stat">
                     <span>🔄</span>
-                    <strong>{inProgressTasks}</strong>
+                    <strong>{inProgress}</strong>
                     <p>In Progress</p>
                 </div>
 
                 <div className="tracker-stat">
-                    <span>⏳</span>
-                    <strong>{remainingTasks}</strong>
-                    <p>Remaining</p>
+                    <span>📝</span>
+                    <strong>{inReview}</strong>
+                    <p>In Review</p>
+                </div>
+
+                <div className="tracker-stat">
+                    <span>✅</span>
+                    <strong>{published}</strong>
+                    <p>Published</p>
                 </div>
             </section>
 
             <section className="tracker-section">
                 <div className="tracker-section-heading">
                     <div>
-                        <h2>Research Tasks</h2>
-
+                        <h2>Your Research Papers</h2>
                         <p>
-                            Complete tasks as you progress through
-                            your research.
+                            Live status of papers from your research library.
                         </p>
                     </div>
-
-                    <button
-                        type="button"
-                        className="add-task-button"
-                        onClick={() => setShowForm(!showForm)}
-                    >
-                        {showForm ? "Cancel" : "+ Add Task"}
-                    </button>
                 </div>
 
-                {showForm && (
-                    <form
-                        className="add-task-form"
-                        onSubmit={addTask}
-                    >
-                        <div className="form-field">
-                            <label htmlFor="taskTitle">
-                                Task Title
-                            </label>
-
-                            <input
-                                id="taskTitle"
-                                name="title"
-                                type="text"
-                                placeholder="e.g. Analyze research findings"
-                                value={newTask.title}
-                                onChange={handleInputChange}
-                                required
-                            />
-                        </div>
-
-                        <div className="form-field">
-                            <label htmlFor="taskDescription">
-                                Description
-                            </label>
-
-                            <textarea
-                                id="taskDescription"
-                                name="description"
-                                placeholder="Describe what needs to be done..."
-                                value={newTask.description}
-                                onChange={handleInputChange}
-                                rows="3"
-                            />
-                        </div>
-
-                        <div className="form-field">
-                            <label htmlFor="taskStatus">
-                                Status
-                            </label>
-
-                            <select
-                                id="taskStatus"
-                                name="status"
-                                value={newTask.status}
-                                onChange={handleInputChange}
-                            >
-                                <option value="Pending">
-                                    Pending
-                                </option>
-
-                                <option value="In Progress">
-                                    In Progress
-                                </option>
-
-                                <option value="Completed">
-                                    Completed
-                                </option>
-                            </select>
-                        </div>
-
-                        <button
-                            type="submit"
-                            className="save-task-button"
-                        >
-                            Add Task
-                        </button>
-                    </form>
-                )}
-
                 <div className="task-list">
-                    {tasks.length > 0 ? (
-                        tasks.map((task) => (
+                    {papers.length > 0 ? (
+                        papers.map((paper) => (
                             <article
-                                key={task.id}
-                                className={`task-card ${
-                                    task.status === "Completed"
-                                        ? "task-completed"
-                                        : ""
-                                }`}
+                                key={paper.id}
+                                className="task-card"
                             >
-                                <button
-                                    type="button"
-                                    className="task-checkbox"
-                                    onClick={() => toggleTask(task.id)}
-                                    aria-label={`Mark ${task.title} as ${
-                                        task.status === "Completed"
-                                            ? "pending"
-                                            : "completed"
-                                    }`}
-                                >
-                                    {task.status === "Completed" ? "✓" : ""}
-                                </button>
-
                                 <div className="task-content">
                                     <div className="task-title-row">
-                                        <h3>{task.title}</h3>
+                                        <h3>{paper.title}</h3>
 
-                                        <span
-                                            className={`task-status status-${task.status
-                                                .toLowerCase()
-                                                .replace(" ", "-")}`}
-                                        >
-                                            {task.status}
+                                        <span className="task-status">
+                                            {paper.status || "In Progress"}
                                         </span>
                                     </div>
 
-                                    <p>{task.description}</p>
+                                    <p>
+                                        {paper.file_name}
+                                    </p>
 
                                     <div className="task-actions">
-                                        <select
-                                            value={task.status}
-                                            onChange={(e) =>
-                                                updateTaskStatus(
-                                                    task.id,
-                                                    e.target.value
-                                                )
-                                            }
-                                        >
-                                            <option value="Pending">
-                                                Pending
-                                            </option>
-
-                                            <option value="In Progress">
-                                                In Progress
-                                            </option>
-
-                                            <option value="Completed">
-                                                Completed
-                                            </option>
-                                        </select>
-
-                                        <button
-                                            type="button"
-                                            className="delete-task-button"
-                                            onClick={() =>
-                                                deleteTask(task.id)
-                                            }
-                                        >
-                                            Delete
-                                        </button>
+                                        <span>
+                                            Uploaded: {formatDate(paper.created_at)}
+                                        </span>
                                     </div>
                                 </div>
                             </article>
                         ))
                     ) : (
                         <div className="tracker-empty">
-                            <div>📋</div>
+                            <div>📚</div>
 
-                            <h3>No research tasks</h3>
+                            <h3>No research papers found</h3>
 
                             <p>
-                                Add your first task to start tracking
-                                your research progress.
+                                Upload a research paper to see its
+                                progress here.
                             </p>
-
-                            <button
-                                type="button"
-                                className="add-task-button"
-                                onClick={() => setShowForm(true)}
-                            >
-                                + Add Task
-                            </button>
                         </div>
                     )}
                 </div>

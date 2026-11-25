@@ -1,14 +1,115 @@
+
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { getPapers } from "../services/api";
 import "../styles/dashboard.css";
 
 function Dashboard() {
     const { user } = useAuth();
 
+    const [papers, setPapers] = useState([]);
+    const [tasks, setTasks] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            try {
+                setLoading(true);
+                setError("");
+
+                const paperData = await getPapers();
+                setPapers(paperData);
+
+                const userId = user?.user_id;
+
+                if (userId) {
+                    const storageKey = `researchTrackerTasks_${userId}`;
+                    const savedTasks = localStorage.getItem(storageKey);
+
+                    if (savedTasks) {
+                        try {
+                            const parsedTasks = JSON.parse(savedTasks);
+                            setTasks(Array.isArray(parsedTasks) ? parsedTasks : []);
+                        } catch {
+                            setTasks([]);
+                        }
+                    } else {
+                        setTasks([]);
+                    }
+                } else {
+                    setTasks([]);
+                }
+
+            } catch (error) {
+                console.error(error);
+                setError(error.message || "Unable to load dashboard data.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [user?.user_id]);
+
+    const totalPapers = papers.length;
+
+    const inReviewPapers = papers.filter((paper) =>
+        [
+            "Ready for Review",
+            "Submitted",
+            "Under Review",
+            "Revision Required"
+        ].includes(paper.status)
+    ).length;
+
+    const publishedPapers = papers.filter(
+        (paper) => paper.status === "Published"
+    ).length;
+
+    const completedTasks = tasks.filter(
+        (task) => task.status === "Completed"
+    ).length;
+
+    const inProgressTasks = tasks.filter(
+        (task) => task.status === "In Progress"
+    ).length;
+
+    const totalTasks = tasks.length;
+
+    const taskProgress = totalTasks > 0
+        ? Math.round((completedTasks / totalTasks) * 100)
+        : 0;
+
+    const reviewProgress = totalPapers > 0
+        ? Math.round((inReviewPapers / totalPapers) * 100)
+        : 0;
+
+    const publishedProgress = totalPapers > 0
+        ? Math.round((publishedPapers / totalPapers) * 100)
+        : 0;
+
+    const formatDate = (date) => {
+        if (!date) return "Date unavailable";
+
+        return new Date(date).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+        });
+    };
+
+    const recentPapers = [...papers]
+        .sort((a, b) => {
+            return new Date(b.created_at || 0) -
+                new Date(a.created_at || 0);
+        })
+        .slice(0, 5);
+
     return (
         <main className="dashboard-page">
 
-            {/* Header */}
             <section className="dashboard-header">
                 <div>
                     <span className="dashboard-eyebrow">
@@ -34,8 +135,15 @@ function Dashboard() {
                 </Link>
             </section>
 
+            {error && (
+                <div className="dashboard-panel">
+                    <p>{error}</p>
+                    <button onClick={() => window.location.reload()}>
+                        Try Again
+                    </button>
+                </div>
+            )}
 
-            {/* Stats */}
             <section className="dashboard-stats">
 
                 <div className="dashboard-stat-card">
@@ -43,7 +151,7 @@ function Dashboard() {
                         SAVED PAPERS
                     </span>
 
-                    <strong>12</strong>
+                    <strong>{loading ? "..." : totalPapers}</strong>
 
                     <span className="dashboard-stat-note">
                         Papers in your library
@@ -55,10 +163,10 @@ function Dashboard() {
                         IN REVIEW
                     </span>
 
-                    <strong>5</strong>
+                    <strong>{loading ? "..." : inReviewPapers}</strong>
 
                     <span className="dashboard-stat-note">
-                        Papers being analyzed
+                        Papers submitted or under review
                     </span>
                 </div>
 
@@ -67,10 +175,10 @@ function Dashboard() {
                         CITATIONS
                     </span>
 
-                    <strong>24</strong>
+                    <strong>—</strong>
 
                     <span className="dashboard-stat-note">
-                        References organized
+                        Citation data not connected yet
                     </span>
                 </div>
 
@@ -79,7 +187,7 @@ function Dashboard() {
                         TASKS
                     </span>
 
-                    <strong>8</strong>
+                    <strong>{loading ? "..." : totalTasks}</strong>
 
                     <span className="dashboard-stat-note">
                         Research tasks tracked
@@ -88,11 +196,8 @@ function Dashboard() {
 
             </section>
 
-
-            {/* Main dashboard grid */}
             <section className="dashboard-main-grid">
 
-                {/* Progress */}
                 <div className="dashboard-panel progress-panel">
 
                     <div className="dashboard-panel-heading">
@@ -110,48 +215,51 @@ function Dashboard() {
 
                         <div className="dashboard-progress-item">
                             <div className="progress-item-top">
-                                <span>Literature Review</span>
-                                <strong>70%</strong>
+                                <span>Task Completion</span>
+                                <strong>{loading ? "..." : `${taskProgress}%`}</strong>
                             </div>
 
                             <div className="progress-track">
                                 <span
-                                    style={{ width: "70%" }}
+                                    style={{ width: `${taskProgress}%` }}
                                 ></span>
                             </div>
                         </div>
 
                         <div className="dashboard-progress-item">
                             <div className="progress-item-top">
-                                <span>Paper Analysis</span>
-                                <strong>55%</strong>
+                                <span>Papers In Review</span>
+                                <strong>{loading ? "..." : `${reviewProgress}%`}</strong>
                             </div>
 
                             <div className="progress-track">
                                 <span
-                                    style={{ width: "55%" }}
+                                    style={{ width: `${reviewProgress}%` }}
                                 ></span>
                             </div>
                         </div>
 
                         <div className="dashboard-progress-item">
                             <div className="progress-item-top">
-                                <span>Citation Management</span>
-                                <strong>35%</strong>
+                                <span>Published Papers</span>
+                                <strong>{loading ? "..." : `${publishedProgress}%`}</strong>
                             </div>
 
                             <div className="progress-track">
                                 <span
-                                    style={{ width: "35%" }}
+                                    style={{ width: `${publishedProgress}%` }}
                                 ></span>
                             </div>
                         </div>
 
                     </div>
+
+                    <p className="dashboard-stat-note">
+                        Task progress is based on completed tasks.
+                        Paper percentages are based on your total uploaded papers.
+                    </p>
                 </div>
 
-
-                {/* Quick actions */}
                 <div className="dashboard-panel">
 
                     <div className="dashboard-panel-heading">
@@ -163,75 +271,39 @@ function Dashboard() {
 
                     <div className="dashboard-actions">
 
-                        <Link
-                            to="/search"
-                            className="dashboard-action"
-                        >
-                            <div className="dashboard-action-icon">
-                                ⌕
-                            </div>
-
+                        <Link to="/search" className="dashboard-action">
+                            <div className="dashboard-action-icon">⌕</div>
                             <div>
                                 <strong>Search Papers</strong>
-                                <span>
-                                    Discover relevant studies
-                                </span>
+                                <span>Discover relevant studies</span>
                             </div>
-
                             <b>→</b>
                         </Link>
 
-                        <Link
-                            to="/upload"
-                            className="dashboard-action"
-                        >
-                            <div className="dashboard-action-icon">
-                                □
-                            </div>
-
+                        <Link to="/upload" className="dashboard-action">
+                            <div className="dashboard-action-icon">□</div>
                             <div>
                                 <strong>Upload PDF</strong>
-                                <span>
-                                    Analyze a research paper
-                                </span>
+                                <span>Analyze a research paper</span>
                             </div>
-
                             <b>→</b>
                         </Link>
 
-                        <Link
-                            to="/chat"
-                            className="dashboard-action"
-                        >
-                            <div className="dashboard-action-icon">
-                                ◌
-                            </div>
-
+                        <Link to="/chat" className="dashboard-action">
+                            <div className="dashboard-action-icon">◌</div>
                             <div>
                                 <strong>Ask Research AI</strong>
-                                <span>
-                                    Discuss your research
-                                </span>
+                                <span>Discuss your research</span>
                             </div>
-
                             <b>→</b>
                         </Link>
 
-                        <Link
-                            to="/citations"
-                            className="dashboard-action"
-                        >
-                            <div className="dashboard-action-icon">
-                                ¶
-                            </div>
-
+                        <Link to="/citations" className="dashboard-action">
+                            <div className="dashboard-action-icon">¶</div>
                             <div>
                                 <strong>Manage Citations</strong>
-                                <span>
-                                    Organize your references
-                                </span>
+                                <span>Organize your references</span>
                             </div>
-
                             <b>→</b>
                         </Link>
 
@@ -240,14 +312,12 @@ function Dashboard() {
 
             </section>
 
-
-            {/* Recent activity */}
             <section className="dashboard-panel dashboard-activity">
 
                 <div className="dashboard-panel-heading">
                     <div>
                         <span>RECENT ACTIVITY</span>
-                        <h2>Research activity</h2>
+                        <h2>Recently added papers</h2>
                     </div>
 
                     <Link to="/my-research">
@@ -257,73 +327,56 @@ function Dashboard() {
 
                 <div className="activity-list">
 
-                    <div className="activity-item">
-                        <div className="activity-marker">
-                            01
+                    {loading ? (
+                        <p>Loading recent activity...</p>
+                    ) : recentPapers.length > 0 ? (
+                        recentPapers.map((paper, index) => (
+                            <div className="activity-item" key={paper.id}>
+
+                                <div className="activity-marker">
+                                    {String(index + 1).padStart(2, "0")}
+                                </div>
+
+                                <div className="activity-content">
+                                    <strong>{paper.title}</strong>
+
+                                    <span>
+                                        Status: {paper.status || "In Progress"}
+                                    </span>
+                                </div>
+
+                                <time>
+                                    {formatDate(paper.created_at)}
+                                </time>
+
+                            </div>
+                        ))
+                    ) : (
+                        <div className="my-research-empty">
+                            <h3>No research activity yet</h3>
+                            <p>
+                                Your uploaded research papers will appear here.
+                            </p>
+
+                            <Link
+                                to="/upload"
+                                className="dashboard-primary-button"
+                            >
+                                Upload Your First Paper
+                            </Link>
                         </div>
-
-                        <div className="activity-content">
-                            <strong>
-                                Artificial Intelligence in Healthcare
-                            </strong>
-
-                            <span>
-                                Added to your research library
-                            </span>
-                        </div>
-
-                        <time>Today</time>
-                    </div>
-
-                    <div className="activity-item">
-                        <div className="activity-marker">
-                            02
-                        </div>
-
-                        <div className="activity-content">
-                            <strong>
-                                Machine Learning Research Methods
-                            </strong>
-
-                            <span>
-                                Literature review updated
-                            </span>
-                        </div>
-
-                        <time>Yesterday</time>
-                    </div>
-
-                    <div className="activity-item">
-                        <div className="activity-marker">
-                            03
-                        </div>
-
-                        <div className="activity-content">
-                            <strong>
-                                Deep Learning Applications
-                            </strong>
-
-                            <span>
-                                Citation added
-                            </span>
-                        </div>
-
-                        <time>2 days ago</time>
-                    </div>
+                    )}
 
                 </div>
+
             </section>
 
-
-            {/* Bottom CTA */}
             <section className="dashboard-bottom">
 
                 <div>
                     <span>KEEP GOING</span>
 
-                    <h2>
-                        Continue building your research.
-                    </h2>
+                    <h2>Continue building your research.</h2>
 
                     <p>
                         Explore papers, organize your literature,
